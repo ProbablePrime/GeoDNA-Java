@@ -1,6 +1,8 @@
 package geo.dna;
 
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 
 //---------------------------------------------------
 //GeoDNA.java - (C) KD 2012, Richard Fox 2012
@@ -32,6 +34,24 @@ public class GeoDNA {
 		DECODE_MAP.put("t", 2);
 		DECODE_MAP.put("c", 3);	
 	}
+	private static HashMap<String,String> PAIR_MAP = new HashMap<String,String>();
+	static
+	{
+		PAIR_MAP.put("g", "c");
+		PAIR_MAP.put("a", "t");
+		PAIR_MAP.put("t", "a");
+		PAIR_MAP.put("c", "c");
+		PAIR_MAP.put("w", "e");
+		PAIR_MAP.put("e", "w");
+	}
+	private static String join(String r[],String d)
+	{
+	        StringBuilder sb = new StringBuilder();
+	        int i;
+	        for(i=0;i<r.length-1;i++)
+	            sb.append(r[i]+d);
+	        return sb.toString()+r[i];
+	}
 	public static double mod( double x, double m ){
 		 return ( x % m + m ) % m;
 	}
@@ -42,19 +62,26 @@ public class GeoDNA {
 	     };
 	}
 	public static String encode(double latitude, double longitude){
-		int precision = 22;
+		return GeoDNA.encode(latitude, longitude,22,false);
+	}
+	public static String encode(double latitude, double longitude, int precision){
+		return GeoDNA.encode(latitude, longitude, precision, false);
+	}
+	public static String encode(double latitude, double longitude, int precision, boolean radians){
 		String geodna ="";
 		
 		double[] loni = new double[2];
 		double[] lati = new double[]{ -90.0, 90.0 };
 		
-		/*if ( options['radians'] ) {
-	         lat  = Math.toDegrees( lat )
-	         lon = Math.toDegrees( lon );
-		}*/
+		
 		double[] bits = GeoDNA.normalise( latitude, longitude );
 		latitude = bits[0];
 	    longitude = bits[1];
+	    
+	    if ( radians ) {
+	         latitude  = Math.toDegrees( latitude );
+	         longitude = Math.toDegrees( longitude );
+		}
 	    
 	    if ( longitude < 0 ) {
 	         geodna = geodna + 'w';
@@ -93,6 +120,18 @@ public class GeoDNA {
 	    }
 	    return geodna;
 	}
+	//A bit of fun, Pairs the GeoDNA up with its counterpart as though it was real DNA
+	//Could be seen as inverse not sure till i test it :(
+	public static String pair(String gd, boolean swapHemispheres){
+		String[] chars = gd.split("");
+		if(swapHemispheres){
+			chars[1] = PAIR_MAP.get(chars[1]);
+		}
+		for ( int i = 1; i < chars.length; i++ ) {
+			chars[i] = PAIR_MAP.get(chars[i]);
+		}
+		return join(chars, "");
+	}
 	// locates the min/max lat/lons around the geo_dna
 	public static double[][] boundingBox( String geodna ) {
 	     String[] chars = geodna.split("");
@@ -103,11 +142,9 @@ public class GeoDNA {
 	     String first = chars[0];
 
 	     if ( first == "w" ) {
-	         //loni = [ -180.0, 0.0 ];
 	         loni[0] = -180.0;
 	         loni[1] = 0.0;
 	     } else if ( first == "e" ) {
-	         //loni = [ 0.0, 180.0 ];
 	         loni[0] = 0.0;
 	         loni[1] = 180.0;
 	     }
@@ -116,25 +153,23 @@ public class GeoDNA {
 	         String c  = chars[i];
 	         int cd = DECODE_MAP.get(c);
 	         if ( cd == 2 ) {
-	             //loni = [ ( loni[0] + loni[1] ) / 2.0, loni[1] ];
 	             loni[0] = ( loni[0] + loni[1] ) /2.0;
 	         } else {
-	             //loni = [ loni[0],  ( loni[0] + loni[1] ) / 2.0 ];
 	             loni[1] = (loni[0]+loni[1])/2.0;
 	         }
 	         if ( cd == 1 ) {
-	             //lati = [ ( lati[0] + lati[1] ) / 2.0, lati[1] ];
 	             lati[0] = (lati[0] + lati[1])/2;
 	         } else {
 	        	 lati[1] = (lati[0] + lati[1])/2.0;
-	             //lati = [ lati[0],  ( lati[0] + lati[1] ) / 2.0 ];
 	         }
 	     }
 	     double [][] r = {lati,loni};
 	     return r;
 	 }
-	
-	public static double[] decode( String geodna, String options ) {
+	public static double[] decode( String geodna) {
+		return GeoDNA.decode(geodna, false);
+	}
+	public static double[] decode( String geodna, boolean radians ) {
 	     //options = options || {};
 
 	     double[][] bits = GeoDNA.boundingBox( geodna );
@@ -143,181 +178,156 @@ public class GeoDNA {
 
 	     double lat = ( lati[0] + lati[1] ) / 2.0;
 	     double lon = ( loni[0] + loni[1] ) / 2.0;
-
-	     /*if ( options['radians'] ) {
-	         return [ _deg2rad( lat ), _deg2rad( lon ) ];
-	     }*/
+	     
+	     if(radians){
+	    	 lat = Math.toRadians(lat);
+	    	 lon = Math.toRadians(lon);
+	     }
+	     
 	     return new double[] { lat, lon };
+	}
+	public static double[] addVector(String geodna, double dy, double dx){
+		double[] bits = GeoDNA.decode(geodna);
+		return new double[]{
+				GeoDNA.mod( ( bits[ 0 ] + 90.0 + dy ), 180.0 ) - 90.0,
+				GeoDNA.mod( ( bits[ 1 ] + 180.0 + dx ), 360.0 ) - 180.0
+		};
+	}
+	public static String pointFromPointBearingAndDistance(String geodna, double bearing, double distance){
+		return GeoDNA.pointFromPointBearingAndDistance(geodna, bearing, distance,22);
+	}
+	public static String pointFromPointBearingAndDistance(String geodna, double bearing, double distance, int precision){
+		distance = distance * 1000;
+		double [] bits = GeoDNA.decode(geodna,true);
+		double lat1 = bits[0];
+		double lon1 = bits[1];
+		double lat2 = Math.asin( Math.sin( lat1 ) * Math.cos(distance) / RADIUS_OF_EARTH) 
+					+  Math.cos( lat1 ) * Math.sin( distance / RADIUS_OF_EARTH ) * Math.cos( bearing );
+		double lon2 = lon1 + Math.atan2( Math.sin( bearing ) * Math.sin( distance / RADIUS_OF_EARTH ) * Math.cos( lat1 ),
+                						 Math.cos( distance / RADIUS_OF_EARTH ) - Math.sin( lat1 ) * Math.sin( lat2 ));
+		return GeoDNA.encode(lat2, lon2,precision, true);
+	}
+	
+	public static double distanceInKm(String ga, String gb){
+		double[] a = GeoDNA.decode(ga);
+		double[] b = GeoDNA.decode(gb);
+		
+		if ( a[1] * b[1] < 0.0 && Math.abs( a[1] - b[1] ) > 180.0 ) {
+	         a = GeoDNA.addVector( ga, 0.0, 180.0 );
+	         b = GeoDNA.addVector( gb, 0.0, 180.0 );
+	    }
+		
+		double x = ( Math.toRadians(b[1]) - Math.toRadians(a[1]) ) * Math.cos( ( Math.toRadians(a[0]) + Math.toRadians(b[0])) / 2 );
+	    double y = ( Math.toRadians(b[0]) - Math.toRadians(a[0]) );
+	    
+	    double d = Math.sqrt( x*x + y*y ) * RADIUS_OF_EARTH;
+	    return d / 1000;
+	}
+	
+	public static String[] neighbours ( String geodna ) {
+	     double[][] bi = GeoDNA.boundingBox( geodna );
+	     double[] lati = bi[0];
+	     double[] loni = bi[1];
+	     double width  = Math.abs( loni[1] - loni[0] );
+	     double height = Math.abs( lati[1] - lati[0] );
+	     String[] neighbours = new String[16];
+
+	     for (int i = -1; i <= 1; i++ ) {
+	         for ( int j = -1; j <= 1; j++ ) {
+	             if ( i!=0 || j!=0 ) {
+	            	 double [] bits = GeoDNA.addVector ( geodna, height * i, width * j );
+	                 neighbours[neighbours.length] = GeoDNA.encode( bits[0], bits[1], geodna.length(), false );
+	             }
+	         }
+	     }
+	     return neighbours;
+	}
+	
+	// This is experimental!!
+	// Totally unoptimised - use at your peril!
+	public static ArrayList<String> neighboursWithinRadius( String geodna, double radius, int precision) {
+
+		 ArrayList<String> neighbours = new ArrayList<String>();
+	     double rh = radius * Math.sqrt(2);
+
+	     String start = GeoDNA.pointFromPointBearingAndDistance( geodna, -( Math.PI / 4 ), rh );
+	     String end = GeoDNA.pointFromPointBearingAndDistance( geodna, Math.PI / 4, rh );
+	     double[][] bbox = GeoDNA.boundingBox( start );
+	     double[] bits = GeoDNA.decode( start );
+	     double slon = bits[1];
+	     bits = GeoDNA.decode( end );
+	     double elon = bits[1];
+	     double dheight = Math.abs( bbox[0][1] - bbox[0][0] );
+	     double dwidth  = Math.abs( bbox[1][1] - bbox[1][0] );
+	     double[] n = GeoDNA.normalise( 0.0, Math.abs( elon - slon ) );
+	     double delta = Math.abs(n[1]);
+	     double tlat = 0.0;
+	     double tlon = 0.0;
+	     String current = start;
+
+	     while ( tlat <= delta ) {
+	         while ( tlon <= delta ) {
+	             double[] cbits = GeoDNA.addVector( current, 0.0, dwidth );
+	             current = GeoDNA.encode( cbits[0], cbits[1], precision );
+	             double d = GeoDNA.distanceInKm( current, geodna );
+	             if ( d <= radius ) {
+	                 neighbours.add(current);
+	             }
+	             tlon = tlon + dwidth;
+	         }
+
+	         tlat = tlat + dheight;
+	         bits = GeoDNA.addVector( start, -tlat , 0.0 );
+	         current = GeoDNA.encode( bits[0], bits[1], precision);
+	         tlon = 0.0;
+	     }
+	     return neighbours;
+	}
+	// This takes an array of GeoDNA codes and reduces it to its
+	// minimal set of codes covering the same area.
+	// Needs a more optimal impl.
+	public static ArrayList<String> reduce( List<String> geodna_codes ) {
+	     // hash all the codes
+	     HashMap<String,Integer> codes = new HashMap<String,Integer>();;
+	     for (int i = 0; i < geodna_codes.size(); i++ ) {
+	         codes.put(geodna_codes.get(i), 1);
+	     }
+
+	     ArrayList<String> reduced = new ArrayList<String>();
+	     String code;
+	     for (int i = 0; i < geodna_codes.size(); i++ ) {
+	         code = geodna_codes.get(i);
+	         if ( codes.get(code) != null ) {
+	             String parent = code.substring( 0, code.length() - 1 );
+
+	             if ( codes.get( parent + 'a' ) ==1
+	               && codes.get( parent + 't' )==1
+	               && codes.get( parent + 'g' )==1
+	               && codes.get( parent + 'c' )==1) {
+	            	 	codes.remove(parent + 'a');
+	            	 	codes.remove(parent + 't');
+	            	 	codes.remove(parent + 'g');
+	            	 	codes.remove(parent + 'c');
+	            	 	reduced.add(parent);
+	            	 	
+	             } else {
+	            	 
+	            	 reduced.add(code);
+	            	 
+	             }
+	         }
+	     }
+	     if ( geodna_codes.size() == reduced.size() ) {
+	         return reduced;
+	     }
+	     return GeoDNA.reduce( reduced );
 	 }
+
 }
 
-//---------------------------------------------------
-//geodna.js - (C) KD 2012
-//---------------------------------------------------
-//Converts between lat/lon and a "geodna" code,
-//which is a single string representing a point
-//on the earth's surface.   The string is basically
-//an approximation to the lat/lon coordinate,
-//and the longer the string, the more accurate it
-//will be.   In general, coordinates that are
-//close together will share a string prefix,
-//making these codes very useful for providing
-//very fast proximity searching using only
-//text-based approaches (eg. SQL's "LIKE" operator)
-//---------------------------------------------------
-//http://www.geodna.org
-//---------------------------------------------------
+/*
 
-/*var VERSION = "0.4";
-
-GeoDNA = {
  
-
-
-
-
-
-
- addVector: function ( geodna, dy, dx ) {
-     var bits = GeoDNA.decode( geodna );
-     var lat = bits[0];
-     var lon = bits[1];
-     return [
-         _mod(( lat + 90.0 + dy ), 180.0 ) - 90.0,
-         _mod(( lon + 180.0 + dx ), 360.0 ) - 180.0
-     ];
- },
-
-
-
- pointFromPointBearingAndDistance: function ( geodna, bearing, distance, options ) {
-     options   = options || {};
-     var distance = distance * 1000; // make it metres instead of kilometres
-     var precision = options['precision'] || geodna.length;
-     var bits = GeoDNA.decode( geodna, { radians: true } );
-     var lat1 = bits[0];
-     var lon1 = bits[1];
-     var lat2 = Math.asin( Math.sin( lat1 ) * Math.cos( distance / RADIUS_OF_EARTH ) +
-                           Math.cos( lat1 ) * Math.sin( distance / RADIUS_OF_EARTH ) * Math.cos( bearing ) );
-     var lon2 = lon1 + Math.atan2( Math.sin( bearing ) * Math.sin( distance / RADIUS_OF_EARTH ) * Math.cos( lat1 ),
-                       Math.cos( distance / RADIUS_OF_EARTH ) - Math.sin( lat1 ) * Math.sin( lat2 ));
-     return GeoDNA.encode( lat2, lon2, { precision: precision, radians: true } );
- },
-
- distanceInKm: function( ga, gb ) {
-     var a = GeoDNA.decode( ga );
-     var b = GeoDNA.decode( gb );
-
-     // if a[1] and b[1] have different signs, we need to translate
-     // everything a bit in order for the formulae to work.
-     if ( a[1] * b[1] < 0.0 && Math.abs( a[1] - b[1] ) > 180.0 ) {
-         a = GeoDNA.addVector( ga, 0.0, 180.0 );
-         b = GeoDNA.addVector( gb, 0.0, 180.0 );
-     }
-     var x = ( _deg2rad(b[1]) - _deg2rad(a[1]) ) * Math.cos( ( _deg2rad(a[0]) + _deg2rad(b[0])) / 2 );
-     var y = ( _deg2rad(b[0]) - _deg2rad(a[0]) );
-     var d = Math.sqrt( x*x + y*y ) * RADIUS_OF_EARTH;
-     return d / 1000;
- },
-
- neighbours: function ( geodna ) {
-     var bits = GeoDNA.boundingBox( geodna );
-     var lati = bits[0];
-     var loni = bits[1];
-     var width  = Math.abs( loni[1] - loni[0] );
-     var height = Math.abs( lati[1] - lati[0] );
-     var neighbours = [];
-
-     for (var i = -1; i <= 1; i++ ) {
-         for ( var j = -1; j <= 1; j++ ) {
-             if ( i || j ) {
-                 var bits = GeoDNA.addVector ( geodna, height * i, width * j );
-                 neighbours[neighbours.length] = GeoDNA.encode( bits[0], bits[1], { precision: geodna.length } );
-             }
-         }
-     }
-     return neighbours;
- },
-
- // This is experimental!!
- // Totally unoptimised - use at your peril!
- neighboursWithinRadius: function ( geodna, radius, options) {
-     options = options || {};
-     options.precision = options['precision'] || 12;
-
-     var neighbours = [];
-     var rh = radius * Math.SQRT2;
-
-     var start = GeoDNA.pointFromPointBearingAndDistance( geodna, -( Math.PI / 4 ), rh, options );
-     var   end = GeoDNA.pointFromPointBearingAndDistance( geodna, Math.PI / 4, rh, options );
-     var bbox = GeoDNA.boundingBox( start );
-     var bits = GeoDNA.decode( start );
-     var slon = bits[1];
-     bits = GeoDNA.decode( end );
-     var elon = bits[1];
-     var dheight = Math.abs( bbox[0][1] - bbox[0][0] );
-     var dwidth  = Math.abs( bbox[1][1] - bbox[1][0] );
-     var n = GeoDNA.normalise( 0.0, Math.abs( elon - slon ) );
-     var delta = Math.abs(n[1]);
-     var tlat = 0.0;
-     var tlon = 0.0;
-     var current = start;
-
-     while ( tlat <= delta ) {
-         while ( tlon <= delta ) {
-             var cbits = GeoDNA.addVector( current, 0.0, dwidth );
-             current = GeoDNA.encode( cbits[0], cbits[1], options );
-             var d = GeoDNA.distanceInKm( current, geodna );
-             if ( d <= radius ) {
-                 neighbours[neighbours.length] = current;
-             }
-             tlon = tlon + dwidth;
-         }
-
-         tlat = tlat + dheight;
-         var bits = GeoDNA.addVector( start, -tlat , 0.0 );
-         current = GeoDNA.encode( bits[0], bits[1], options );
-         tlon = 0.0;
-     }
-     return neighbours;
- },
-
- // This takes an array of GeoDNA codes and reduces it to its
- // minimal set of codes covering the same area.
- // Needs a more optimal impl.
- reduce: function( geodna_codes ) {
-     // hash all the codes
-     var codes = {};
-     for (var i = 0; i < geodna_codes.length; i++ ) {
-         codes[ geodna_codes[i] ] = 1;
-     }
-
-     var reduced = [];
-     var code;
-     for (var i = 0; i < geodna_codes.length; i++ ) {
-         code = geodna_codes[i];
-         if ( codes[ code ] ) {
-             var parent = code.substr( 0, code.length - 1 );
-
-             if ( codes [ parent + 'a' ]
-               && codes [ parent + 't' ]
-               && codes [ parent + 'g' ]
-               && codes [ parent + 'c' ]) {
-                   codes[ parent + 'a' ] = null;
-                   codes[ parent + 't' ] = null;
-                   codes[ parent + 'g' ] = null;
-                   codes[ parent + 'c' ] = null;
-                   reduced.push( parent );
-             } else {
-                 reduced.push( code );
-             }
-         }
-     }
-     if ( geodna_codes.length == reduced.length ) {
-         return reduced;
-     }
-     return GeoDNA.reduce( reduced );
- },
 
 
 };*/
