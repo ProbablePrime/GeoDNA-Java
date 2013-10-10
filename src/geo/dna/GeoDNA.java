@@ -134,30 +134,30 @@ public class GeoDNA {
 	}
 	// locates the min/max lat/lons around the geo_dna
 	public static double[][] boundingBox( String geodna ) {
-	     String[] chars = geodna.split("");
+	     char[] chars = geodna.toCharArray();
 
 	     double[] loni = new double[2];
 	     double[] lati= { -90.0, 90.0 };
 
-	     String first = chars[0];
+	     char first = chars[0];
 
-	     if ( first == "w" ) {
+	     if ( first == 'w' ) {
 	         loni[0] = -180.0;
 	         loni[1] = 0.0;
-	     } else if ( first == "e" ) {
+	     } else if ( first == 'e' ) {
 	         loni[0] = 0.0;
 	         loni[1] = 180.0;
 	     }
 
 	     for ( int i = 1; i < chars.length; i++ ) {
-	         String c  = chars[i];
-	         int cd = DECODE_MAP.get(c);
-	         if ( cd == 2 ) {
+	         char c  = chars[i];
+	         int cd = DECODE_MAP.get(Character.toString(c));
+	         if ( (cd & 2) != 0 ) {
 	             loni[0] = ( loni[0] + loni[1] ) /2.0;
 	         } else {
 	             loni[1] = (loni[0]+loni[1])/2.0;
 	         }
-	         if ( cd == 1 ) {
+	         if ( (cd & 1) != 0 ) {
 	             lati[0] = (lati[0] + lati[1])/2;
 	         } else {
 	        	 lati[1] = (lati[0] + lati[1])/2.0;
