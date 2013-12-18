@@ -5,4 +5,4 @@ A Java port of GeoDNA of a javascript implementation of the Geo::DNA perl module
 
 For more info visit: http://www.geodna.org/docs/index.html
 
-Woo got some reconition.
+Woo geodna.org noticed this :D
